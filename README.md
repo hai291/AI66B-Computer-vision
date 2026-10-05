@@ -180,3 +180,15 @@ python model.py
 
 Để so sánh công bằng với `LumbarCNN`, dùng cùng cách chia dữ liệu, preprocessing,
 loss và metric weighted multi-class log loss khi bổ sung training loop.
+
+Pipeline demo sử dụng EfficientNet-B0 mặc định:
+
+```bash
+python train_demo.py
+```
+
+Có thể chạy baseline để đối chiếu:
+
+```bash
+python train_demo.py --model baseline
+```
