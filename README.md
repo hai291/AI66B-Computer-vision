@@ -44,6 +44,7 @@ data/
 
 > Thư mục `data/` ở đây là cách tổ chức **trên máy của nhóm**. Trên Kaggle Notebook, dữ liệu nằm tại `/kaggle/input/rsna-2024-lumbar-spine-degenerative-classification/`. Bộ test của cuộc thi dùng cơ chế test ẩn; không nên giả định máy cá nhân có đủ file test hoặc nhãn test.
 
+<<<<<<< Updated upstream
 ### 2.1. `train.csv` — nhãn mức độ nghiêm trọng
 
 | Trường | Ý nghĩa |
@@ -166,3 +167,16 @@ Nguồn tham khảo:
 - [Kaggle — mô tả và tải dữ liệu](https://www.kaggle.com/competitions/rsna-2024-lumbar-spine-degenerative-classification/data)
 - [Kaggle — cách tính điểm](https://www.kaggle.com/competitions/rsna-2024-lumbar-spine-degenerative-classification/overview/evaluation)
 - [Kaggle — điều khoản sử dụng dữ liệu](https://www.kaggle.com/competitions/rsna-2024-lumbar-spine-degenerative-classification/rules)
+
+CNN baseline để phân loại mức độ nghiêm trọng (3 lớp) từ một crop ảnh MRI: xem [model.py](model.py).
+
+`EfficientNetB0` là mô hình chính cho thử nghiệm EfficientNet. Mô hình nhận tensor
+ảnh grayscale có dạng `(batch, 1, height, width)` và trả về logits dạng
+`(batch, 3)`. Có thể kiểm tra nhanh bằng:
+
+```bash
+python model.py
+```
+
+Để so sánh công bằng với `LumbarCNN`, dùng cùng cách chia dữ liệu, preprocessing,
+loss và metric weighted multi-class log loss khi bổ sung training loop.
