@@ -192,3 +192,12 @@ Có thể chạy baseline để đối chiếu:
 ```bash
 python train_demo.py --model baseline
 ```
+
+Để kiểm tra nhanh với hai crop DICOM thật và nhãn severity tra từ các file CSV:
+
+```bash
+python train_efficientnet_real_data.py --samples 2 --epochs 1
+```
+
+Đây chỉ là smoke test để xác nhận pipeline đọc DICOM, crop theo tọa độ, ánh xạ
+nhãn và cập nhật trọng số; không phải kết quả đánh giá mô hình trên toàn bộ dataset.
