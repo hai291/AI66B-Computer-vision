@@ -12,7 +12,8 @@ from sklearn.metrics import accuracy_score, confusion_matrix, f1_score, log_loss
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset
 
-from model import LumbarCNN, build_densenet
+from model import LumbarCNN
+from model_densenet import build_densenet
 
 
 LABELS = {"Normal/Mild": 0, "Moderate": 1, "Severe": 2}

@@ -2,7 +2,7 @@ Issue #5 - DenseNet cho crop MRI
 
 Chon DenseNet121: khoang 7,98 trieu tham so voi dau ImageNet 1000 lop,
 it hon DenseNet169 (14,15 trieu). Dau ra trong bai nay duoc doi thanh 3 lop.
-Ban 1 kenh, 3 lop trong model.py co 6.950.659 tham so.
+Ban 1 kenh, 3 lop trong model_densenet.py co 6.950.659 tham so.
 DenseNet noi dac trung cua cac lop truoc vao lop sau, giup tai su dung dac trung.
 Day la lua chon khoi dau de thu nghiem, chua phai bien the tot nhat da duoc chung minh.
 Nguon: https://docs.pytorch.org/vision/main/models/generated/torchvision.models.densenet121.html

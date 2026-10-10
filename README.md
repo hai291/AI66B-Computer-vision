@@ -166,3 +166,37 @@ Nguồn tham khảo:
 - [Kaggle — mô tả và tải dữ liệu](https://www.kaggle.com/competitions/rsna-2024-lumbar-spine-degenerative-classification/data)
 - [Kaggle — cách tính điểm](https://www.kaggle.com/competitions/rsna-2024-lumbar-spine-degenerative-classification/overview/evaluation)
 - [Kaggle — điều khoản sử dụng dữ liệu](https://www.kaggle.com/competitions/rsna-2024-lumbar-spine-degenerative-classification/rules)
+
+CNN baseline để phân loại mức độ nghiêm trọng (3 lớp) từ một crop ảnh MRI: xem [model.py](model.py).
+
+`EfficientNetB0` là mô hình chính cho thử nghiệm EfficientNet. Mô hình nhận tensor
+ảnh grayscale có dạng `(batch, 1, height, width)` và trả về logits dạng
+`(batch, 3)`. Có thể kiểm tra nhanh bằng:
+
+```bash
+python model.py
+```
+
+Để so sánh công bằng với `LumbarCNN`, dùng cùng cách chia dữ liệu, preprocessing,
+loss và metric weighted multi-class log loss khi bổ sung training loop.
+
+Pipeline demo sử dụng EfficientNet-B0 mặc định:
+
+```bash
+python train_demo.py
+```
+
+Có thể chạy baseline để đối chiếu:
+
+```bash
+python train_demo.py --model baseline
+```
+
+Để kiểm tra nhanh với hai crop DICOM thật và nhãn severity tra từ các file CSV:
+
+```bash
+python train_efficientnet_real_data.py --samples 2 --epochs 1
+```
+
+Đây chỉ là smoke test để xác nhận pipeline đọc DICOM, crop theo tọa độ, ánh xạ
+nhãn và cập nhật trọng số; không phải kết quả đánh giá mô hình trên toàn bộ dataset.
