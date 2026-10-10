@@ -1,7 +1,9 @@
+import argparse
+
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
-from model import LumbarCNN  # lay CNN tu model.py
+from model import EfficientNetB0, LumbarCNN
 
 
 class FakeSpineDataset(Dataset):
@@ -27,13 +29,24 @@ class FakeSpineDataset(Dataset):
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Train a demo lumbar-spine classifier.")
+    parser.add_argument(
+        "--model",
+        choices=("efficientnet", "baseline"),
+        default="efficientnet",
+        help="Model architecture to train (default: efficientnet).",
+    )
+    args = parser.parse_args()
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Device: {device}")
 
     train_ds = FakeSpineDataset(num_samples=300, img_size=64)
     train_loader = DataLoader(train_ds, batch_size=16, shuffle=True)  # chia mam 16 anh
 
-    model = LumbarCNN(in_channels=1, num_classes=3).to(device)
+    model_class = EfficientNetB0 if args.model == "efficientnet" else LumbarCNN
+    model = model_class(in_channels=1, num_classes=3).to(device)
+    print(f"Model: {model.__class__.__name__}")
     criterion = nn.CrossEntropyLoss()  # do doan sai bao nhieu
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)  # tu sua trong so model
 
