@@ -1,0 +1,82 @@
+Issue #5 - DenseNet cho crop MRI
+
+Chon DenseNet121: khoang 7,98 trieu tham so voi dau ImageNet 1000 lop,
+it hon DenseNet169 (14,15 trieu). Dau ra trong bai nay duoc doi thanh 3 lop.
+Ban 1 kenh, 3 lop trong model.py co 6.950.659 tham so.
+DenseNet noi dac trung cua cac lop truoc vao lop sau, giup tai su dung dac trung.
+Day la lua chon khoi dau de thu nghiem, chua phai bien the tot nhat da duoc chung minh.
+Nguon: https://docs.pytorch.org/vision/main/models/generated/torchvision.models.densenet121.html
+       https://docs.pytorch.org/vision/main/models/generated/torchvision.models.densenet169.html
+
+Crop la cat mot o nho quanh diem (x, y) duoc danh dau tren anh MRI.
+Vi du tam (200, 250), canh 128: lay cot 136:264 va hang 186:314.
+Trong mang anh, thu tu la anh[y, x]. Resize chi doi kich thuoc, khong chon vung.
+Code crop 128x128 pixel goc, them vien den neu cham mep, resize thanh 224x224.
+Moi crop lay nhan tu train.csv theo study_id + condition + level.
+Bo qua nhan thieu; thieu file anh thi dung va bao duong dan, khong tu bo qua.
+Tat ca condition duoc hoc chung trong mot model phan loai 3 muc do.
+
+Anh xam duoc min-max tren tung lat roi chuan hoa ve [-1, 1] cho ca hai model.
+DenseNet doi convolution dau thanh 1 kenh bang tong trong so 3 kenh RGB.
+Day la dieu chinh cho MRI; khong dung nguyen bo chuan hoa RGB cua ImageNet.
+Fine-tune toan bo DenseNet pretrained. Baseline LumbarCNN khoi tao ngau nhien.
+Vi vay so sanh nay la hai cau hinh thuc te, khong tach rieng tac dong cua pretraining.
+Them --no-pretrained neu muon so sanh ca hai model huan luyen tu dau.
+
+Chay tren Kaggle
+
+1. Dang nhap, vao cuoc thi va chap nhan dieu khoan truy cap dataset:
+   https://www.kaggle.com/competitions/rsna-2024-lumbar-spine-degenerative-classification
+2. Tao Notebook, import file densenet_kaggle.ipynb trong repo.
+3. Trong Add Input/Add Data, gan dataset cua cuoc thi vao notebook.
+   Can train.csv, train_label_coordinates.csv va train_images.
+   Khong can tai toan bo anh ve may; dataset duoc doc tai /kaggle/input.
+4. Trong Settings chon Accelerator la GPU duoc cap, bat Internet de clone repo
+   va tai pretrained weights. Script chi dung mot GPU, ke ca duoc cap T4 x2.
+5. Chay tung cell. Cell xem crop de kiem tra vi tri. Cell smoke chi dung 20 ca,
+   1 epoch de kiem tra code; khong dung ket qua nay lam so sanh cuoi.
+6. Chay hai cell train day du. Dau ra nam trong /kaggle/working/runs.
+   Neu het bo nho GPU, doi batch-size thanh 8 cho ca hai lenh.
+   Khi xong, Save Version va luu outputs; tai runs ve de giu checkpoint/metric.
+   Moi lan thu cau hinh moi can ten output moi, tranh ghi de ket qua cu.
+
+Lenh tren may ca nhan (chay tu thu muc repo)
+
+python -m pip install -r requirements-densenet.txt
+python train_densenet.py --data-root data --model baseline --output runs/baseline
+python train_densenet.py --data-root data --model densenet --output runs/densenet
+python train_densenet.py --data-root data --evaluate runs/densenet
+
+Cau hinh mac dinh: train/val 80/20 theo study_id, seed 42, 5 epoch,
+batch 16, Adam lr=0.001, CrossEntropy khong trong so, khong augmentation.
+CNN baseline va DenseNet dung cung danh sach crop, preprocessing, split va metric.
+train_demo.py cu chi co anh gia va train accuracy, khong co baseline MRI validation.
+Vi vay can chay lai LumbarCNN tren du lieu that bang lenh tren de so sanh.
+Chon checkpoint co validation log loss thap nhat trong 5 epoch cho ca hai model.
+Day la holdout validation; chua co ket qua tren tap test doc lap.
+
+Trong moi thu muc output:
+config.json: cau hinh, so tham so, device va phien ban torch.
+samples.csv: danh sach crop, nhan va split train/val de doi chieu.
+history.csv: train loss va validation metric tung epoch.
+best.pt: checkpoint co validation log loss thap nhat.
+metrics.json: log loss, accuracy, macro-F1, confusion matrix cua checkpoint tot nhat.
+predictions.csv: xac suat tung crop validation, co condition va level de phan tich tiep.
+Confusion matrix: hang la nhan that, cot la du doan; thu tu Normal/Mild, Moderate, Severe.
+Cell cuoi notebook tao comparison.csv tu ket qua hai model va kiem tra cung split.
+
+Ket qua hien tai: chua train MRI that, chua co metric de ket luan hon baseline.
+Can cap nhat comparison.csv va nhan xet sau khi chay Kaggle; khong dien so uoc luong.
+Metric o day tinh theo crop co toa do cho san, khong phai metric RSNA day du.
+Khong dung toa do validation de train. Tuy nhien, validation van can toa do that
+de cat anh, nen chi danh gia buoc phan loai khi da biet vi tri, chua tu dinh vi.
+Nhieu toa do cua cung condition-level tao nhieu crop, moi crop tinh mot mau.
+
+Uu diem du kien: tap trung vao vung can hoc, tai su dung dac trung va pretrained weights.
+Han che: can toa do, crop co the mat ngu canh; 128 pixel khong cung kich thuoc vat ly
+giua cac may chup. DenseNet ton bo nho activation va cham hon CNN nho.
+Accuracy co the cao chi vi lop Normal/Mild dong; can xem macro-F1 va confusion matrix.
+Toi uu tiep sau khi co ket qua: thu crop-size va learning rate tung cai mot,
+giu nguyen split, ghi lai cau hinh, khong chon ket qua dua tren test.
+
+PR can thanh vien khac review truoc khi merge. Khi chua co ket qua that, giu draft.

@@ -42,6 +42,20 @@ class LumbarCNN(nn.Module):
         return self.classifier(x)
 
 
+def build_densenet(pretrained=True):
+    from torchvision.models import DenseNet121_Weights, densenet121
+
+    weights = DenseNet121_Weights.DEFAULT if pretrained else None
+    model = densenet121(weights=weights)
+    rgb_conv = model.features.conv0
+    model.features.conv0 = nn.Conv2d(1, 64, 7, stride=2, padding=3, bias=False)
+    # Cong 3 kenh de nhan anh xam, tuong duong lap anh xam thanh RGB.
+    with torch.no_grad():
+        model.features.conv0.weight.copy_(rgb_conv.weight.sum(dim=1, keepdim=True))
+    model.classifier = nn.Linear(model.classifier.in_features, 3)
+    return model
+
+
 if __name__ == "__main__":
     model = LumbarCNN()
     x = torch.randn(4, 1, 128, 128)
