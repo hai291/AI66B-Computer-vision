@@ -12,14 +12,15 @@ from sklearn.metrics import accuracy_score, confusion_matrix, f1_score, log_loss
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset
 
-from model import LumbarCNN
+from model_baseline import build_baseline
 from model_densenet import build_densenet
+from model_densenet_manual import build_densenet_manual
 
 
 LABELS = {"Normal/Mild": 0, "Moderate": 1, "Severe": 2}
 
 
-def read_samples(root, seed, max_studies):
+def read_samples(root, seed, max_studies, split_file=None):
     labels = pd.read_csv(root / "train.csv").melt(
         id_vars="study_id", var_name="target", value_name="severity"
     )
@@ -39,10 +40,24 @@ def read_samples(root, seed, max_studies):
     if max_studies:
         studies = sorted(random.Random(seed).sample(studies, min(max_studies, len(studies))))
         samples = samples[samples.study_id.isin(studies)].copy()
-    if len(studies) < 2:
-        raise ValueError("Need at least 2 studies to split train/validation")
-    train_ids, val_ids = train_test_split(studies, test_size=0.2, random_state=seed)
-    samples["split"] = np.where(samples.study_id.isin(val_ids), "val", "train")
+    if len(studies) < 4:
+        raise ValueError("Need at least 4 studies for train/validation/test")
+    if split_file is not None and split_file.exists():
+        split = pd.read_csv(split_file)
+        if set(split.columns) != {"study_id", "split"} or split.study_id.duplicated().any():
+            raise ValueError("Split file must contain one study_id and split per study")
+        if set(split.study_id) != set(studies) or set(split.split) != {"train", "val", "test"}:
+            raise ValueError("Split does not match this dataset/subset. Use the same data and max-studies.")
+    else:
+        train_ids, remaining_ids = train_test_split(studies, test_size=0.3, random_state=seed)
+        val_ids, test_ids = train_test_split(remaining_ids, test_size=0.5, random_state=seed)
+        split = pd.DataFrame({"study_id": studies, "split": "train"})
+        split.loc[split.study_id.isin(val_ids), "split"] = "val"
+        split.loc[split.study_id.isin(test_ids), "split"] = "test"
+        if split_file is not None:
+            split_file.parent.mkdir(parents=True, exist_ok=True)
+            split.to_csv(split_file, index=False)
+    samples = samples.merge(split, on="study_id", validate="many_to_one")
     samples["path"] = (
         "train_images/" + samples.study_id.astype(str) + "/"
         + samples.series_id.astype(str) + "/" + samples.instance_number.astype(str) + ".dcm"
@@ -50,7 +65,7 @@ def read_samples(root, seed, max_studies):
     for path in samples.path.unique():
         if not (root / path).is_file():
             raise FileNotFoundError(root / path)
-    print(f"Skipped {missing} missing labels; train={len(train_ids)}, val={len(val_ids)} studies")
+    print(f"Skipped {missing} missing labels; studies per split: {split.split.value_counts().to_dict()}")
     return samples.reset_index(drop=True)
 
 
@@ -86,13 +101,17 @@ class SpineCrops(Dataset):
         crop = crop_image(pixels, row["x"], row["y"], self.crop_size)
         image = F.interpolate(crop[None, None], size=(self.image_size, self.image_size),
                               mode="bilinear", align_corners=False)[0]
-        return (image - 0.5) / 0.5, row["label"]
+        return image, row["label"]
 
 
-def make_model(name, pretrained):
+def make_model(name, pretrained=False):
     if name == "baseline":
-        return LumbarCNN()
-    return build_densenet(pretrained=pretrained)
+        return build_baseline()
+    if name == "densenet_manual":
+        return build_densenet_manual()
+    if name == "densenet":
+        return build_densenet(pretrained=pretrained)
+    raise ValueError(f"Unknown model: {name}")
 
 
 def evaluate(model, loader, device):
@@ -116,34 +135,39 @@ def evaluate(model, loader, device):
     return metrics, probabilities
 
 
-def save_results(output, metrics, probabilities, rows):
-    (output / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+def save_results(output, metrics, probabilities, rows, split_name):
+    metrics = dict(metrics, split=split_name)
+    (output / f"{split_name}_metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     predictions = rows.copy()
     predictions[["normal_mild", "moderate", "severe"]] = probabilities
-    predictions.to_csv(output / "predictions.csv", index=False)
+    predictions.to_csv(output / f"{split_name}_predictions.csv", index=False)
     print(json.dumps(metrics, indent=2))
 
 
 def main():
     parser = argparse.ArgumentParser(description="Train DenseNet or the baseline on RSNA crops")
     parser.add_argument("--data-root", type=Path, required=True)
-    parser.add_argument("--model", choices=["baseline", "densenet"], default="densenet")
+    parser.add_argument("--model", choices=["baseline", "densenet_manual", "densenet"], default="densenet")
     parser.add_argument("--output", type=Path, default=Path("runs/densenet"))
     parser.add_argument("--evaluate", type=Path, help="Run directory containing best.pt")
+    parser.add_argument("--split", choices=["val", "test"], default="test", help="Dataset for --evaluate")
+    parser.add_argument("--split-file", type=Path, default=Path("runs/split.csv"))
     parser.add_argument("--epochs", type=int, default=5)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--crop-size", type=int, default=128)
-    parser.add_argument("--image-size", type=int, default=224)
+    parser.add_argument("--image-size", type=int, default=128)
     parser.add_argument("--workers", type=int, default=2)
     parser.add_argument("--max-studies", type=int, default=0, help="0 uses all studies")
-    parser.add_argument("--no-pretrained", action="store_true")
+    parser.add_argument("--pretrained", action="store_true", help="Optional ImageNet weights for library DenseNet only")
     args = parser.parse_args()
     if args.epochs < 1 or args.batch_size < 2 or args.crop_size < 2 or args.image_size < 64:
         parser.error("epochs >= 1, batch-size >= 2, crop-size >= 2 and image-size >= 64 required")
     if args.lr <= 0 or args.workers < 0 or args.max_studies < 0:
         parser.error("lr > 0, workers >= 0 and max-studies >= 0 required")
+    if args.pretrained and args.model != "densenet":
+        parser.error("--pretrained is only available for the library densenet")
 
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -157,18 +181,22 @@ def main():
         output = args.evaluate
         checkpoint = torch.load(output / "best.pt", map_location="cpu", weights_only=True)
         config = checkpoint["config"]
+        if config.get("pipeline_version") != 2:
+            raise ValueError("Old checkpoint uses a different pipeline. Retrain all models with the new 3-way split.")
         samples = pd.read_csv(output / "samples.csv")
-        val_rows = samples[samples.split == "val"]
-        dataset = SpineCrops(val_rows, args.data_root, config["crop_size"], config["image_size"])
+        rows = samples[samples.split == args.split]
+        if rows.empty:
+            raise ValueError(f"No {args.split} samples saved with this checkpoint")
+        dataset = SpineCrops(rows, args.data_root, config["crop_size"], config["image_size"])
         loader = DataLoader(dataset, batch_size=args.batch_size, num_workers=args.workers)
         model = make_model(config["model"], pretrained=False).to(device)
         model.load_state_dict(checkpoint["model"])
         metrics, probabilities = evaluate(model, loader, device)
         metrics["epoch"] = checkpoint["epoch"]
-        save_results(output, metrics, probabilities, val_rows)
+        save_results(output, metrics, probabilities, rows, args.split)
         return
 
-    samples = read_samples(args.data_root, args.seed, args.max_studies)
+    samples = read_samples(args.data_root, args.seed, args.max_studies, args.split_file)
     train_rows = samples[samples.split == "train"]
     val_rows = samples[samples.split == "val"]
     if len(train_rows) < 2 or val_rows.empty:
@@ -178,7 +206,7 @@ def main():
         raise FileExistsError(f"Use an empty output directory: {args.output}")
     config = vars(args).copy()
     config.update(data_root=str(args.data_root), output=str(args.output), evaluate=None,
-                  pretrained=args.model == "densenet" and not args.no_pretrained,
+                  split_file=str(args.split_file), pipeline_version=2,
                   torch_version=str(torch.__version__), device=device)
     (args.output / "config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
     samples.to_csv(args.output / "samples.csv", index=False)
@@ -217,7 +245,7 @@ def main():
             best_loss = metrics["log_loss"]
             torch.save({"model": model.state_dict(), "config": config, "epoch": epoch},
                        args.output / "best.pt")
-            save_results(args.output, metrics, probabilities, val_rows)
+            save_results(args.output, metrics, probabilities, val_rows, "val")
 
 
 if __name__ == "__main__":

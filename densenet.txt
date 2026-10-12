@@ -1,82 +1,98 @@
-Issue #5 - DenseNet cho crop MRI
+Issue #5 - CNN baseline, DenseNet tự xây và DenseNet thư viện
 
-Chon DenseNet121: khoang 7,98 trieu tham so voi dau ImageNet 1000 lop,
-it hon DenseNet169 (14,15 trieu). Dau ra trong bai nay duoc doi thanh 3 lop.
-Ban 1 kenh, 3 lop trong model_densenet.py co 6.950.659 tham so.
-DenseNet noi dac trung cua cac lop truoc vao lop sau, giup tai su dung dac trung.
-Day la lua chon khoi dau de thu nghiem, chua phai bien the tot nhat da duoc chung minh.
-Nguon: https://docs.pytorch.org/vision/main/models/generated/torchvision.models.densenet121.html
-       https://docs.pytorch.org/vision/main/models/generated/torchvision.models.densenet169.html
+Yêu cầu bài tập được thực hiện bằng ba model:
+1. baseline: CNN cơ bản 3 cụm Conv/BatchNorm/ReLU/MaxPool, giống notebook CNN đã gửi.
+2. densenet_manual: tự dựng DenseNet121 từ các lớp torch.nn, không gọi model có sẵn.
+3. densenet: gọi torchvision.models.densenet121.
 
-Crop la cat mot o nho quanh diem (x, y) duoc danh dau tren anh MRI.
-Vi du tam (200, 250), canh 128: lay cot 136:264 va hang 186:314.
-Trong mang anh, thu tu la anh[y, x]. Resize chi doi kich thuoc, khong chon vung.
-Code crop 128x128 pixel goc, them vien den neu cham mep, resize thanh 224x224.
-Moi crop lay nhan tu train.csv theo study_id + condition + level.
-Bo qua nhan thieu; thieu file anh thi dung va bao duong dan, khong tu bo qua.
-Tat ca condition duoc hoc chung trong mot model phan loai 3 muc do.
+Baseline mới ở model_baseline.py. model.py của nhóm không bị sửa.
+Bản tự dựng nằm trong model_densenet_manual.py, dùng một lớp DenseBlock
+và hai hàm dựng transition/model, không dùng torchvision hoặc trọng số tải sẵn.
 
-Anh xam duoc min-max tren tung lat roi chuan hoa ve [-1, 1] cho ca hai model.
-DenseNet doi convolution dau thanh 1 kenh bang tong trong so 3 kenh RGB.
-Day la dieu chinh cho MRI; khong dung nguyen bo chuan hoa RGB cua ImageNet.
-Fine-tune toan bo DenseNet pretrained. Baseline LumbarCNN khoi tao ngau nhien.
-Vi vay so sanh nay la hai cau hinh thuc te, khong tach rieng tac dong cua pretraining.
-Them --no-pretrained neu muon so sanh ca hai model huan luyen tu dau.
+DenseNet giữ đặc trưng cũ và nối thêm đặc trưng mới bằng torch.cat(..., dim=1).
+Ví dụ đầu vào 64 kênh, mỗi lớp thêm 32: sau một lớp có 96 kênh, sau hai lớp có 128.
+Mỗi dense layer dùng BN/ReLU/Conv 1x1 rồi BN/ReLU/Conv 3x3.
+DenseNet121 có 4 dense block với 6/12/24/16 dense layer, growth rate 32;
+transition dùng Conv 1x1 giảm nửa số kênh và AvgPool giảm kích thước.
+Đây là bản dựng đầy đủ DenseNet121-BC một kênh, 3 đầu ra, không chỉ thêm một skip connection.
+Bản tự dựng và bản thư viện đều có 6.950.659 tham số với cấu hình này.
 
-Chay tren Kaggle
+"Không gọi thư viện" ở đây là không gọi kiến trúc model dựng sẵn.
+Code vẫn dùng PyTorch cho Conv, BatchNorm, pooling, gradient và optimizer.
+Nguồn kiến trúc: https://arxiv.org/abs/1608.06993
+Đối chiếu cấu trúc: https://docs.pytorch.org/vision/main/_modules/torchvision/models/densenet.html
 
-1. Dang nhap, vao cuoc thi va chap nhan dieu khoan truy cap dataset:
-   https://www.kaggle.com/competitions/rsna-2024-lumbar-spine-degenerative-classification
-2. Tao Notebook, import file densenet_kaggle.ipynb trong repo.
-3. Trong Add Input/Add Data, gan dataset cua cuoc thi vao notebook.
-   Can train.csv, train_label_coordinates.csv va train_images.
-   Khong can tai toan bo anh ve may; dataset duoc doc tai /kaggle/input.
-4. Trong Settings chon Accelerator la GPU duoc cap, bat Internet de clone repo
-   va tai pretrained weights. Script chi dung mot GPU, ke ca duoc cap T4 x2.
-5. Chay tung cell. Cell xem crop de kiem tra vi tri. Cell smoke chi dung 20 ca,
-   1 epoch de kiem tra code; khong dung ket qua nay lam so sanh cuoi.
-6. Chay hai cell train day du. Dau ra nam trong /kaggle/working/runs.
-   Neu het bo nho GPU, doi batch-size thanh 8 cho ca hai lenh.
-   Khi xong, Save Version va luu outputs; tai runs ve de giu checkpoint/metric.
-   Moi lan thu cau hinh moi can ten output moi, tranh ghi de ket qua cu.
+Chia dữ liệu
+Train / validation / test xấp xỉ 70% / 15% / 15%, seed 42, theo study_id.
+Số lượng được làm tròn theo số ca; ảnh cùng ca chỉ thuộc một tập.
+Dữ liệu test được giữ lại từ train.csv có nhãn, không phải test ẩn của Kaggle.
+split.csv lưu mỗi ca thuộc tập nào. Ba model dùng chung file này.
+Giữ nguyên dữ liệu và MAX_STUDIES; không tạo split mới cho từng model.
 
-Lenh tren may ca nhan (chay tu thu muc repo)
+Train dùng để cập nhật trọng số.
+Validation đánh giá sau mỗi epoch và chọn checkpoint có log loss thấp nhất.
+Test chỉ evaluate sau khi chốt cấu hình và train xong; không dùng test để chọn model/epoch.
+Cả ba model được đánh giá trên cùng crop test với accuracy, macro-F1 và log loss.
+Checkpoint cũ chia 80/20 không được dùng làm kết quả mới: phải train lại,
+vì các ca test mới có thể đã nằm trong tập train cũ.
 
+Xử lý ảnh chung
+Ghép tọa độ và nhãn bằng study_id + condition + level, bỏ nhãn thiếu.
+Crop 128x128 quanh tọa độ, thêm viền khi sát mép, ảnh xám min-max về [0, 1].
+Mặc định ảnh đầu vào 128x128, batch 16, Adam lr=0.001, không augmentation.
+Cả ba mặc định học từ đầu, không pretrained để so sánh cùng điều kiện.
+Có thể chạy riêng một thử nghiệm thư viện với PRETRAINED=True / --pretrained;
+khi báo cáo phải ghi rõ có thêm kiến thức từ ImageNet, không gộp với so sánh từ đầu.
+Cùng ngân sách epoch không đảm bảo mỗi kiến trúc đã đạt cấu hình tốt nhất.
+
+Chạy trên Kaggle
+Nên dùng compare_models_kaggle.ipynb: chứa toàn bộ code, không cần clone GitHub.
+Gắn dataset RSNA, bật GPU, chạy lần lượt các cell.
+Notebook train từng model riêng, dùng chung samples/split; cell cuối mới evaluate test
+và tạo comparison.csv. Chạy thử mặc định 20 ca, 1 epoch chỉ kiểm tra pipeline.
+Để lấy kết quả đầy đủ: MAX_STUDIES=0, EPOCHS=5, RUN_ROOT là một thư mục mới;
+chạy lại từ cell cấu hình. Tinh chỉnh dựa trên validation trước khi chạy cell test.
+
+Nếu muốn notebook riêng:
+cnn_basic_kaggle.ipynb: CNN baseline.
+densenet_manual_kaggle.ipynb: DenseNet tự xây.
+densenet_kaggle.ipynb: DenseNet thư viện.
+Các bản riêng có cùng code xử lý và chia dữ liệu. Dùng cùng seed và dữ liệu;
+tốt nhất tải split.csv của lần chạy đầu, gắn vào notebook khác và sửa SPLIT_FILE.
+Không so sánh một model chạy 20 ca với model dùng toàn bộ ca.
+
+Lệnh chạy từ thư mục repo
 python -m pip install -r requirements-densenet.txt
-python train_densenet.py --data-root data --model baseline --output runs/baseline
-python train_densenet.py --data-root data --model densenet --output runs/densenet
-python train_densenet.py --data-root data --evaluate runs/densenet
+python train_densenet.py --data-root data --model baseline --split-file runs/full/split.csv --output runs/full/baseline
+python train_densenet.py --data-root data --model densenet_manual --split-file runs/full/split.csv --output runs/full/densenet_manual
+python train_densenet.py --data-root data --model densenet --split-file runs/full/split.csv --output runs/full/densenet
 
-Cau hinh mac dinh: train/val 80/20 theo study_id, seed 42, 5 epoch,
-batch 16, Adam lr=0.001, CrossEntropy khong trong so, khong augmentation.
-CNN baseline va DenseNet dung cung danh sach crop, preprocessing, split va metric.
-train_demo.py cu chi co anh gia va train accuracy, khong co baseline MRI validation.
-Vi vay can chay lai LumbarCNN tren du lieu that bang lenh tren de so sanh.
-Chon checkpoint co validation log loss thap nhat trong 5 epoch cho ca hai model.
-Day la holdout validation; chua co ket qua tren tap test doc lap.
+Sau khi train xong và đã chốt cấu hình:
+python train_densenet.py --data-root data --evaluate runs/full/baseline
+python train_densenet.py --data-root data --evaluate runs/full/densenet_manual
+python train_densenet.py --data-root data --evaluate runs/full/densenet
+Thêm --split val nếu chỉ muốn kiểm tra lại validation; mặc định --evaluate dùng test.
+--max-studies 20 --epochs 1 để chạy thử; dùng split-file/output riêng cho smoke test.
 
-Trong moi thu muc output:
-config.json: cau hinh, so tham so, device va phien ban torch.
-samples.csv: danh sach crop, nhan va split train/val de doi chieu.
-history.csv: train loss va validation metric tung epoch.
-best.pt: checkpoint co validation log loss thap nhat.
-metrics.json: log loss, accuracy, macro-F1, confusion matrix cua checkpoint tot nhat.
-predictions.csv: xac suat tung crop validation, co condition va level de phan tich tiep.
-Confusion matrix: hang la nhan that, cot la du doan; thu tu Normal/Mild, Moderate, Severe.
-Cell cuoi notebook tao comparison.csv tu ket qua hai model va kiem tra cung split.
+Đầu ra mỗi model
+config.json và samples.csv: cấu hình, nhãn crop và tập tương ứng.
+history.csv: train loss và validation metric theo epoch.
+best.pt: checkpoint được chọn bằng validation.
+val_metrics.json, val_predictions.csv: kết quả validation tốt nhất.
+test_metrics.json, test_predictions.csv: chỉ xuất khi evaluate test.
+Confusion matrix có hàng là nhãn thật, cột là dự đoán; thứ tự Normal/Mild, Moderate, Severe.
+comparison.csv trong notebook tổng hợp metric test của các model đã chạy.
 
-Ket qua hien tai: chua train MRI that, chua co metric de ket luan hon baseline.
-Can cap nhat comparison.csv va nhan xet sau khi chay Kaggle; khong dien so uoc luong.
-Metric o day tinh theo crop co toa do cho san, khong phai metric RSNA day du.
-Khong dung toa do validation de train. Tuy nhien, validation van can toa do that
-de cat anh, nen chi danh gia buoc phan loai khi da biet vi tri, chua tu dinh vi.
-Nhieu toa do cua cung condition-level tao nhieu crop, moi crop tinh mot mau.
+Kiểm tra code trên máy
+python test_densenet_pipeline.py
+Test tạo DICOM giả, kiểm tra chia ca không trùng, chạy train/lưu/nạp/evaluate cả ba.
+Ảnh test được cố ý làm hỏng trong lúc train để xác nhận vòng train không đọc chúng.
+Test đối chiếu kết quả số của DenseNet tự xây và thư viện khi gán cùng trọng số.
+Việc gán trọng số tham chiếu này chỉ nằm trong test; model tự xây thật học từ đầu.
 
-Uu diem du kien: tap trung vao vung can hoc, tai su dung dac trung va pretrained weights.
-Han che: can toa do, crop co the mat ngu canh; 128 pixel khong cung kich thuoc vat ly
-giua cac may chup. DenseNet ton bo nho activation va cham hon CNN nho.
-Accuracy co the cao chi vi lop Normal/Mild dong; can xem macro-F1 va confusion matrix.
-Toi uu tiep sau khi co ket qua: thu crop-size va learning rate tung cai mot,
-giu nguyen split, ghi lai cau hinh, khong chon ket qua dua tren test.
-
-PR can thanh vien khac review truoc khi merge. Khi chua co ket qua that, giu draft.
+Chưa có metric MRI thật cho phiên bản mới; cần chạy Kaggle và bổ sung nhận xét.
+Ưu điểm dự kiến: DenseNet tái sử dụng đặc trưng; baseline nhỏ và dễ giải thích.
+Hạn chế: DenseNet tốn bộ nhớ/thời gian hơn; dữ liệu lệch lớp nên cần xem macro-F1.
+Metric tính theo crop với tọa độ đã có, chưa đánh giá khả năng tự tìm vùng cần crop.
+Crop cố định theo pixel có thể mất ngữ cảnh và khác kích thước vật lý giữa máy chụp.
+Không dùng điểm này như điểm RSNA đầy đủ. PR vẫn cần thành viên khác review trước merge.
