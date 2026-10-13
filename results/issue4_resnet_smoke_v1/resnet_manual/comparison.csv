@@ -1,0 +1,2 @@
+model,pretrained,epoch,test_log_loss,test_accuracy,test_macro_f1
+resnet_manual,False,1,2.9324622217245695,0.7746478873239436,0.44551282051282054

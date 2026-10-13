@@ -1,0 +1,17 @@
+{
+  "source": "Executed Kaggle notebooks (outputs verified, no re-training)",
+  "notebooks": [
+    {
+      "notebook": "resnet-manual-kaggle.ipynb",
+      "sha256": "97bb8a8230b5509297b00bd4b9a1513e8d1af8c145cf792b80abab7042be0306"
+    },
+    {
+      "notebook": "resnet-kaggle.ipynb",
+      "sha256": "df4d152391ba2cc336d9aca4bd667bee68bf2d7c39a291250b9ce26421f255c4"
+    },
+    {
+      "notebook": "compare-resnet-kaggle.ipynb",
+      "sha256": "4c1619332b30ba0a423832f6850f96c685ab93d222416357d3c4856c0bc51ba6"
+    }
+  ]
+}
