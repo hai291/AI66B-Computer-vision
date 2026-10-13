@@ -90,9 +90,31 @@ Test tạo DICOM giả, kiểm tra chia ca không trùng, chạy train/lưu/nạ
 Test đối chiếu kết quả số của DenseNet tự xây và thư viện khi gán cùng trọng số.
 Việc gán trọng số tham chiếu này chỉ nằm trong test; model tự xây thật học từ đầu.
 
-Chưa có metric MRI thật cho phiên bản mới; cần chạy Kaggle và bổ sung nhận xét.
-Ưu điểm dự kiến: DenseNet tái sử dụng đặc trưng; baseline nhỏ và dễ giải thích.
-Hạn chế: DenseNet tốn bộ nhớ/thời gian hơn; dữ liệu lệch lớp nên cần xem macro-F1.
+Kết quả chạy thử trên MRI thật đã lưu ở results/issue5_smoke_v2.
+Đọc ket_qua.txt trong thư mục đó để xem cấu hình, bảng metric và nhận xét.
+Đã đối chiếu cùng 480 crop, cùng split theo ca và tính lại metric từ dự đoán.
+Đây là 20 ca, 1 epoch, chưa phải kết quả train toàn bộ dữ liệu.
+DenseNet manual có test log loss thấp nhất; bản thư viện có macro-F1 cao nhất.
+Baseline và manual chỉ dự đoán Normal/Mild; cả ba chưa dự đoán đúng Severe.
+Không kết luận kiến trúc tốt hơn từ một lần chạy thử nhỏ.
+
+Tổng hợp và vẽ lại từ các CSV đã lưu (không cần GPU, MRI hay checkpoint):
+python summarize_densenet_results.py
+Lệnh kiểm tra split, cấu hình và metric rồi tạo comparison.csv, split_summary.csv,
+test_comparison.png và test_confusion_matrices.png ngay trong thư mục kết quả.
+Chỉ có một epoch nên không vẽ đường cong để suy diễn xu hướng hội tụ.
+
+Khi session Kaggle kết thúc, biến Python và import mất khỏi bộ nhớ.
+Nếu file kết quả vẫn còn, có thể đọc lại bằng đường dẫn trực tiếp trong một cell:
+from pathlib import Path
+import pandas as pd
+RUN_ROOT = Path("/kaggle/working/cnn_densenet_smoke_v2")
+print(pd.read_csv(RUN_ROOT / "comparison.csv"))
+Việc này không train lại. Nếu file đã mất, dùng ZIP kết quả đã tải về hoặc Output
+của phiên notebook đã lưu. Không bấm Run All chỉ để đọc lại kết quả.
+
+Ưu điểm: DenseNet tái sử dụng đặc trưng; baseline nhỏ và dễ giải thích.
+Hạn chế: DenseNet có nhiều tham số hơn; chưa đo thời gian/bộ nhớ để so sánh thực tế.
 Metric tính theo crop với tọa độ đã có, chưa đánh giá khả năng tự tìm vùng cần crop.
 Crop cố định theo pixel có thể mất ngữ cảnh và khác kích thước vật lý giữa máy chụp.
 Không dùng điểm này như điểm RSNA đầy đủ. PR vẫn cần thành viên khác review trước merge.

@@ -1,0 +1,2 @@
+model,pretrained,epoch,test_log_loss,test_accuracy,test_macro_f1
+baseline,False,1,0.795965575086675,0.8028169014084507,0.296875
