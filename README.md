@@ -44,7 +44,6 @@ data/
 
 > Thư mục `data/` ở đây là cách tổ chức **trên máy của nhóm**. Trên Kaggle Notebook, dữ liệu nằm tại `/kaggle/input/rsna-2024-lumbar-spine-degenerative-classification/`. Bộ test của cuộc thi dùng cơ chế test ẩn; không nên giả định máy cá nhân có đủ file test hoặc nhãn test.
 
-<<<<<<< Updated upstream
 ### 2.1. `train.csv` — nhãn mức độ nghiêm trọng
 
 | Trường | Ý nghĩa |

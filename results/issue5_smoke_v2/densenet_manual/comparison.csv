@@ -1,0 +1,2 @@
+model,pretrained,epoch,test_log_loss,test_accuracy,test_macro_f1
+densenet_manual,False,1,0.6568974049369339,0.8028169014084507,0.296875

@@ -1,0 +1,120 @@
+Issue #5 - CNN baseline, DenseNet tự xây và DenseNet thư viện
+
+Yêu cầu bài tập được thực hiện bằng ba model:
+1. baseline: CNN cơ bản 3 cụm Conv/BatchNorm/ReLU/MaxPool, giống notebook CNN đã gửi.
+2. densenet_manual: tự dựng DenseNet121 từ các lớp torch.nn, không gọi model có sẵn.
+3. densenet: gọi torchvision.models.densenet121.
+
+Baseline mới ở model_baseline.py. model.py của nhóm không bị sửa.
+Bản tự dựng nằm trong model_densenet_manual.py, dùng một lớp DenseBlock
+và hai hàm dựng transition/model, không dùng torchvision hoặc trọng số tải sẵn.
+
+DenseNet giữ đặc trưng cũ và nối thêm đặc trưng mới bằng torch.cat(..., dim=1).
+Ví dụ đầu vào 64 kênh, mỗi lớp thêm 32: sau một lớp có 96 kênh, sau hai lớp có 128.
+Mỗi dense layer dùng BN/ReLU/Conv 1x1 rồi BN/ReLU/Conv 3x3.
+DenseNet121 có 4 dense block với 6/12/24/16 dense layer, growth rate 32;
+transition dùng Conv 1x1 giảm nửa số kênh và AvgPool giảm kích thước.
+Đây là bản dựng đầy đủ DenseNet121-BC một kênh, 3 đầu ra, không chỉ thêm một skip connection.
+Bản tự dựng và bản thư viện đều có 6.950.659 tham số với cấu hình này.
+
+"Không gọi thư viện" ở đây là không gọi kiến trúc model dựng sẵn.
+Code vẫn dùng PyTorch cho Conv, BatchNorm, pooling, gradient và optimizer.
+Nguồn kiến trúc: https://arxiv.org/abs/1608.06993
+Đối chiếu cấu trúc: https://docs.pytorch.org/vision/main/_modules/torchvision/models/densenet.html
+
+Chia dữ liệu
+Train / validation / test xấp xỉ 70% / 15% / 15%, seed 42, theo study_id.
+Số lượng được làm tròn theo số ca; ảnh cùng ca chỉ thuộc một tập.
+Dữ liệu test được giữ lại từ train.csv có nhãn, không phải test ẩn của Kaggle.
+split.csv lưu mỗi ca thuộc tập nào. Ba model dùng chung file này.
+Giữ nguyên dữ liệu và MAX_STUDIES; không tạo split mới cho từng model.
+
+Train dùng để cập nhật trọng số.
+Validation đánh giá sau mỗi epoch và chọn checkpoint có log loss thấp nhất.
+Test chỉ evaluate sau khi chốt cấu hình và train xong; không dùng test để chọn model/epoch.
+Cả ba model được đánh giá trên cùng crop test với accuracy, macro-F1 và log loss.
+Checkpoint cũ chia 80/20 không được dùng làm kết quả mới: phải train lại,
+vì các ca test mới có thể đã nằm trong tập train cũ.
+
+Xử lý ảnh chung
+Ghép tọa độ và nhãn bằng study_id + condition + level, bỏ nhãn thiếu.
+Crop 128x128 quanh tọa độ, thêm viền khi sát mép, ảnh xám min-max về [0, 1].
+Mặc định ảnh đầu vào 128x128, batch 16, Adam lr=0.001, không augmentation.
+Cả ba mặc định học từ đầu, không pretrained để so sánh cùng điều kiện.
+Có thể chạy riêng một thử nghiệm thư viện với PRETRAINED=True / --pretrained;
+khi báo cáo phải ghi rõ có thêm kiến thức từ ImageNet, không gộp với so sánh từ đầu.
+Cùng ngân sách epoch không đảm bảo mỗi kiến trúc đã đạt cấu hình tốt nhất.
+
+Chạy trên Kaggle
+Nên dùng compare_models_kaggle.ipynb: chứa toàn bộ code, không cần clone GitHub.
+Gắn dataset RSNA, bật GPU, chạy lần lượt các cell.
+Notebook train từng model riêng, dùng chung samples/split; cell cuối mới evaluate test
+và tạo comparison.csv. Chạy thử mặc định 20 ca, 1 epoch chỉ kiểm tra pipeline.
+Để lấy kết quả đầy đủ: MAX_STUDIES=0, EPOCHS=5, RUN_ROOT là một thư mục mới;
+chạy lại từ cell cấu hình. Tinh chỉnh dựa trên validation trước khi chạy cell test.
+
+Nếu muốn notebook riêng:
+cnn_basic_kaggle.ipynb: CNN baseline.
+densenet_manual_kaggle.ipynb: DenseNet tự xây.
+densenet_kaggle.ipynb: DenseNet thư viện.
+Các bản riêng có cùng code xử lý và chia dữ liệu. Dùng cùng seed và dữ liệu;
+tốt nhất tải split.csv của lần chạy đầu, gắn vào notebook khác và sửa SPLIT_FILE.
+Không so sánh một model chạy 20 ca với model dùng toàn bộ ca.
+
+Lệnh chạy từ thư mục repo
+python -m pip install -r requirements-densenet.txt
+python train_densenet.py --data-root data --model baseline --split-file runs/full/split.csv --output runs/full/baseline
+python train_densenet.py --data-root data --model densenet_manual --split-file runs/full/split.csv --output runs/full/densenet_manual
+python train_densenet.py --data-root data --model densenet --split-file runs/full/split.csv --output runs/full/densenet
+
+Sau khi train xong và đã chốt cấu hình:
+python train_densenet.py --data-root data --evaluate runs/full/baseline
+python train_densenet.py --data-root data --evaluate runs/full/densenet_manual
+python train_densenet.py --data-root data --evaluate runs/full/densenet
+Thêm --split val nếu chỉ muốn kiểm tra lại validation; mặc định --evaluate dùng test.
+--max-studies 20 --epochs 1 để chạy thử; dùng split-file/output riêng cho smoke test.
+
+Đầu ra mỗi model
+config.json và samples.csv: cấu hình, nhãn crop và tập tương ứng.
+history.csv: train loss và validation metric theo epoch.
+best.pt: checkpoint được chọn bằng validation.
+val_metrics.json, val_predictions.csv: kết quả validation tốt nhất.
+test_metrics.json, test_predictions.csv: chỉ xuất khi evaluate test.
+Confusion matrix có hàng là nhãn thật, cột là dự đoán; thứ tự Normal/Mild, Moderate, Severe.
+comparison.csv trong notebook tổng hợp metric test của các model đã chạy.
+
+Kiểm tra code trên máy
+python test_densenet_pipeline.py
+Test tạo DICOM giả, kiểm tra chia ca không trùng, chạy train/lưu/nạp/evaluate cả ba.
+Ảnh test được cố ý làm hỏng trong lúc train để xác nhận vòng train không đọc chúng.
+Test đối chiếu kết quả số của DenseNet tự xây và thư viện khi gán cùng trọng số.
+Việc gán trọng số tham chiếu này chỉ nằm trong test; model tự xây thật học từ đầu.
+
+Kết quả chạy thử trên MRI thật đã lưu ở results/issue5_smoke_v2.
+Đọc ket_qua.txt trong thư mục đó để xem cấu hình, bảng metric và nhận xét.
+Đã đối chiếu cùng 480 crop, cùng split theo ca và tính lại metric từ dự đoán.
+Đây là 20 ca, 1 epoch, chưa phải kết quả train toàn bộ dữ liệu.
+DenseNet manual có test log loss thấp nhất; bản thư viện có macro-F1 cao nhất.
+Baseline và manual chỉ dự đoán Normal/Mild; cả ba chưa dự đoán đúng Severe.
+Không kết luận kiến trúc tốt hơn từ một lần chạy thử nhỏ.
+
+Tổng hợp và vẽ lại từ các CSV đã lưu (không cần GPU, MRI hay checkpoint):
+python summarize_densenet_results.py
+Lệnh kiểm tra split, cấu hình và metric rồi tạo comparison.csv, split_summary.csv,
+test_comparison.png và test_confusion_matrices.png ngay trong thư mục kết quả.
+Chỉ có một epoch nên không vẽ đường cong để suy diễn xu hướng hội tụ.
+
+Khi session Kaggle kết thúc, biến Python và import mất khỏi bộ nhớ.
+Nếu file kết quả vẫn còn, có thể đọc lại bằng đường dẫn trực tiếp trong một cell:
+from pathlib import Path
+import pandas as pd
+RUN_ROOT = Path("/kaggle/working/cnn_densenet_smoke_v2")
+print(pd.read_csv(RUN_ROOT / "comparison.csv"))
+Việc này không train lại. Nếu file đã mất, dùng ZIP kết quả đã tải về hoặc Output
+của phiên notebook đã lưu. Không bấm Run All chỉ để đọc lại kết quả.
+
+Ưu điểm: DenseNet tái sử dụng đặc trưng; baseline nhỏ và dễ giải thích.
+Hạn chế: DenseNet có nhiều tham số hơn; chưa đo thời gian/bộ nhớ để so sánh thực tế.
+Metric tính theo crop với tọa độ đã có, chưa đánh giá khả năng tự tìm vùng cần crop.
+Crop cố định theo pixel có thể mất ngữ cảnh và khác kích thước vật lý giữa máy chụp.
+Không dùng điểm này như điểm RSNA đầy đủ. PR vẫn cần thành viên khác review trước merge.

@@ -1,0 +1,17 @@
+{
+  "source": "User-provided Kaggle result archives",
+  "archives": [
+    {
+      "archive": "baseline_results.zip",
+      "sha256": "a000d54f3dcf44a691ccd1bdb9e5d4c38303e45e32ffb354a518e62351019ab5"
+    },
+    {
+      "archive": "densenet_manual_results.zip",
+      "sha256": "6b7bb46e3e5071d0adf8d25b2c7433737b71b75e121fdfc3d7b5e48518c02e62"
+    },
+    {
+      "archive": "densenet_results.zip",
+      "sha256": "7553c52899a37e60d4ab26307b152be131c348d1f55eebe7623d0442abbb13f1"
+    }
+  ]
+}

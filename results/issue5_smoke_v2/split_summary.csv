@@ -1,0 +1,4 @@
+split,studies,crops,Normal/Mild,Moderate,Severe
+train,14,334,268,51,15
+val,3,75,63,8,4
+test,3,71,57,10,4

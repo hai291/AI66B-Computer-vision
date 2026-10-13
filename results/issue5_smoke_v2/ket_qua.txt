@@ -1,0 +1,89 @@
+Kết quả chạy thử CNN baseline và DenseNet trên RSNA 2024
+
+Nguồn
+Ba gói baseline_results.zip, densenet_manual_results.zip, densenet_results.zip.
+Giữ nguyên các CSV/JSON của từng gói trong thư mục theo tên model.
+sources.json lưu tên và SHA-256 của các ZIP gốc để đối chiếu nguồn.
+comparison.csv ở thư mục chung được tổng hợp từ dự đoán đã kiểm tra.
+Không kèm ảnh DICOM hoặc checkpoint. Không train lại khi tổng hợp kết quả.
+
+Mô hình
+baseline: CNN gồm 3 cụm Conv/BatchNorm/ReLU/MaxPool, 23.715 tham số.
+densenet_manual: tự ghép DenseNet121-BC bằng torch.nn, 6.950.659 tham số.
+densenet: gọi torchvision.models.densenet121, 6.950.659 tham số.
+Chọn DenseNet121 để thử dense connection với biến thể nông hơn DenseNet169/201.
+Bản manual dùng cùng cấu trúc để đối chiếu cách tự dựng với thư viện.
+Lựa chọn này chưa chứng minh DenseNet121 là cấu hình tối ưu cho dataset.
+
+Cấu hình
+pipeline_version=2, seed=42, max_studies=20, epochs=1, pretrained=False.
+Crop 128x128 quanh tọa độ có sẵn, ảnh đầu vào một kênh 128x128.
+Batch size=16, learning rate=0.001. Pipeline dùng Adam và cross-entropy.
+Chọn checkpoint bằng validation log loss; lần này chỉ có epoch 1.
+Không dùng test để chọn epoch hoặc tinh chỉnh cấu hình.
+config.json ghi PyTorch 2.11.0+cu128 cho baseline và 2.11.0+cpu cho hai DenseNet.
+Bản PyTorch CPU không dùng CUDA. Bản +cu128 của baseline chỉ xác nhận có hỗ trợ
+CUDA, chưa đủ để xác nhận thiết bị thực tế vì config chưa lưu trường device.
+Không có thời gian train, GPU model hay số đo bộ nhớ trong các gói kết quả.
+
+Chia dữ liệu theo study_id
+Tập          Số ca    Số crop    Normal/Mild    Moderate    Severe
+Train          14        334            268          51        15
+Validation      3         75             63           8         4
+Test            3         71             57          10         4
+
+Ba samples.csv khớp toàn bộ 480 dòng, gồm ca, series, ảnh, tọa độ, nhãn và split.
+Ba split.csv khớp nhau; mỗi ca chỉ thuộc một tập.
+Các dòng trong val/test_predictions.csv khớp tập tương ứng trong samples.csv.
+Đã tính lại log loss, accuracy, macro-F1, confusion matrix và số lượng mỗi lớp
+từ dự đoán; tất cả khớp JSON và comparison.csv gốc (sai số số thực <= 1e-10).
+Validation metric cũng khớp dòng checkpoint tốt nhất trong history.csv.
+
+Kết quả validation
+Model                 Log loss    Accuracy    Macro F1
+CNN baseline          0.775640     84.00%      0.304348
+DenseNet manual       0.700158     84.00%      0.304348
+DenseNet thư viện     0.990965     33.33%      0.209754
+
+Kết quả test
+Model                 Log loss    Accuracy    Macro F1
+CNN baseline          0.795966     80.28%      0.296875
+DenseNet manual       0.656897     80.28%      0.296875
+DenseNet thư viện     0.832044     66.20%      0.380468
+
+Nhận xét
+1. Baseline và DenseNet manual đều dự đoán 71 crop test thành Normal/Mild.
+   Accuracy 80,28% bằng tỷ lệ lớp đa số (57/71), không cho thấy phân biệt được
+   Moderate hay Severe. Manual có log loss thấp hơn baseline, nhưng nhãn dự
+   đoán cuối cùng giống nhau. Log loss đánh giá cả xác suất, không chỉ argmax.
+2. DenseNet thư viện nhận đúng 41/57 Normal/Mild và 6/10 Moderate.
+   Có 16 crop Normal/Mild bị nhầm thành Moderate. Accuracy thấp hơn baseline,
+   macro-F1 cao hơn vì đã nhận được một phần lớp Moderate. Log loss cao hơn.
+3. Cả ba không dự đoán crop nào thành Severe; recall của lớp này bằng 0.
+   Test chỉ có 4 crop Severe nên kết quả theo lớp còn rất hạn chế.
+4. Baseline có ít tham số, dễ giải thích và dùng làm mốc so sánh.
+   DenseNet nối lại đặc trưng từ các lớp trước; bản manual giúp kiểm tra trực
+   tiếp dense connection, còn thư viện giảm phần code phải tự triển khai.
+   Hai bản DenseNet có khoảng 293 lần số tham số của baseline trong cấu hình
+   này. Không suy ra tốc độ hoặc bộ nhớ thực tế chỉ từ số tham số.
+5. Cùng kiến trúc không đảm bảo kết quả train giống nhau: cách tiêu thụ số
+   ngẫu nhiên khi khởi tạo và môi trường thực thi có thể khác. Các kết quả
+   này không chứng minh bản manual tốt hơn hoặc kém hơn cách gọi thư viện.
+
+Giới hạn và hướng tiếp theo
+Đây là chạy thử 20 ca trong một epoch, một seed; test chỉ gồm 3 ca.
+Crop trong cùng ca có tương quan, không coi 71 crop là 71 bệnh nhân độc lập.
+Chưa đủ dữ liệu để kết luận ưu thế kiến trúc hoặc khả năng tổng quát hóa.
+Metric đo phân loại crop với tọa độ cho sẵn, không phải điểm RSNA đầy đủ
+và không đánh giá bước tự phát hiện vị trí cần crop.
+Để mở rộng thí nghiệm: dùng nhiều ca hơn và số epoch đủ, chọn cấu hình trên
+validation. Có thể thử trọng số lớp tính từ train nếu mất cân bằng còn rõ.
+Không lặp lại việc chọn cấu hình theo điểm test của lần chạy thử này.
+Không chọn lọc riêng lần chạy có điểm tốt để thay vào bảng so sánh.
+
+Vẽ và kiểm tra lại toàn bộ kết quả
+Từ thư mục repo: python summarize_densenet_results.py
+Đầu ra: comparison.csv, split_summary.csv, test_comparison.png,
+test_confusion_matrices.png. Không cần session Kaggle hoặc ảnh MRI.
+Chỉ có một epoch nên không vẽ đường cong learning curve.
+PR cần thành viên khác review trước khi merge.
