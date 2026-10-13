@@ -1,0 +1,14 @@
+{
+  "pipeline_version": 2,
+  "model": "resnet_manual",
+  "pretrained": false,
+  "seed": 42,
+  "epochs": 1,
+  "max_studies": 20,
+  "crop_size": 128,
+  "image_size": 128,
+  "batch_size": 16,
+  "lr": 0.001,
+  "torch_version": "unknown",
+  "parameters": 11171779
+}

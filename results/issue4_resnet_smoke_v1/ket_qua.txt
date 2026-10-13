@@ -1,0 +1,96 @@
+Kết quả chạy thử CNN baseline và ResNet trên RSNA 2024
+
+Nguồn
+Ba notebook Kaggle đã chạy xong trên GPU (cuda), không ô lỗi:
+resnet-manual-kaggle.ipynb, resnet-kaggle.ipynb, compare-resnet-kaggle.ipynb.
+sources.json lưu tên và SHA-256 của ba notebook này để đối chiếu nguồn.
+Chỉ tải được notebook kèm output, không tải thư mục /kaggle/working nên thiếu
+val/test_predictions.csv và best.pt. Không kèm ảnh DICOM hoặc checkpoint.
+Các file config.json, history.csv, val/test_metrics.json và comparison.csv dưới
+đây chép nguyên văn số liệu đã in trong output notebook, không train lại khi
+tổng hợp và không suy diễn thêm xác suất từng crop.
+samples.csv và split.csv copy từ issue5_smoke_v2: đã kiểm chứng cùng seed 42 cho
+ra cùng 20 ca, cùng split 14/3/3, số crop và số lượng từng lớp ở val/test khớp
+từng số với output Kaggle, và toàn bộ 480 dòng samples khớp đa tập (multiset).
+Số ca train bỏ nhãn thiếu là 35, khớp dòng "Skipped 35 missing labels" trên Kaggle.
+
+Mô hình
+baseline: CNN gồm 3 cụm Conv/BatchNorm/ReLU/MaxPool, 23.715 tham số
+(đếm lại từ model_baseline.py dùng chung với issue #5).
+resnet_manual: tự ghép ResNet-18 bằng torch.nn (BasicBlock + stem 7x7),
+11.171.779 tham số. resnet: gọi torchvision.models.resnet18, 11.171.779 tham số.
+Đã kiểm chứng bản manual và thư viện có cùng 41 lớp Conv/BatchNorm/Linear;
+gán cùng trọng số cho cùng output (sai số <= 1e-5), xem test_resnet_pipeline.py.
+Chọn ResNet-18 vì đây là model của nhóm ở issue #4, song song với DenseNet121
+của Thành ở issue #5. Lựa chọn này chưa chứng minh ResNet-18 tối ưu cho dataset.
+
+Cấu hình
+pipeline_version=2, seed=42, max_studies=20, epochs=1, pretrained=False.
+Crop 128x128 quanh tọa độ có sẵn, ảnh đầu vào một kênh 128x128.
+Batch size=16, learning rate=0.001. Pipeline dùng Adam và cross-entropy.
+Chọn checkpoint bằng validation log loss; lần này chỉ có epoch 1.
+Không dùng test để chọn epoch hoặc tinh chỉnh cấu hình.
+torch_version không được in trong output notebook nên config.json ghi "unknown".
+Không có thời gian train, GPU model hay số đo bộ nhớ trong output notebook.
+
+Chia dữ liệu theo study_id
+Tập          Số ca    Số crop    Normal/Mild    Moderate    Severe
+Train          14        334            268          51        15
+Validation      3         75             63           8         4
+Test            3         71             57          10         4
+
+Ba samples.csv và ba split.csv ở đây là bản copy của issue5 (cùng split đã
+kiểm chứng); mỗi ca chỉ thuộc một tập. Ba notebook lẻ và compare cho số liệu
+val/test khớp từng chữ số (manual val_loss 1.689925, lib 1.359324 ở cả hai nơi),
+chứng tỏ dùng chung split và seed.
+
+Kết quả validation
+Model                 Log loss    Accuracy    Macro F1
+CNN baseline          0.775640     84.00%      0.304348
+ResNet manual         1.689925     62.67%      0.346971
+ResNet thư viện       1.359324     53.33%      0.304057
+
+Kết quả test
+Model                 Log loss    Accuracy    Macro F1
+CNN baseline          0.795966     80.28%      0.296875
+ResNet manual         2.932462     77.46%      0.445513
+ResNet thư viện       2.690663     71.83%      0.385965
+
+Nhận xét
+1. Baseline dự đoán toàn bộ 75 crop val và 71 crop test thành Normal/Mild.
+   Accuracy 80,28% bằng tỷ lệ lớp đa số (57/71), không phân biệt được Moderate
+   hay Severe. Số liệu baseline khớp từng số với baseline của issue #5 (cùng
+   dữ liệu, split, seed và code), kiểm chứng chéo pipeline ResNet làm đúng.
+2. ResNet manual có macro-F1 test cao nhất (0.445513): đúng 49/57 Normal/Mild
+   và 6/10 Moderate. Bản thư viện thấp hơn (0.385965): đúng 47/57 và 4/10.
+   Baseline loss thấp nhất nhưng F1 thấp nhất; log loss đánh giá cả xác suất,
+   không chỉ argmax, nên đọc hai metric cùng nhau.
+3. Cả ba không dự đoán crop nào thành Severe; recall của lớp này bằng 0.
+   Test chỉ có 4 crop Severe nên kết quả theo lớp còn rất hạn chế.
+4. Bản manual và thư viện cùng 11.171.779 tham số, gấp khoảng 471 lần baseline
+   trong cấu hình này. Không suy ra tốc độ hoặc bộ nhớ thực tế chỉ từ số tham số.
+5. Cùng kiến trúc không đảm bảo kết quả giống nhau giữa các lần chạy: thứ tự
+   tiêu thụ số ngẫu nhiên và môi trường (CPU/CUDA) có thể khác. So với smoke
+   DenseNet (manual test loss 0.6569/F1 0.2969): ResNet manual loss cao hơn
+   nhưng F1 cao hơn. Với 1 epoch và 20 ca, không kết luận kiến trúc nào hơn.
+
+Giới hạn và hướng tiếp theo
+Đây là chạy thử 20 ca trong một epoch, một seed; test chỉ gồm 3 ca.
+Crop trong cùng ca có tương quan, không coi 71 crop là 71 bệnh nhân độc lập.
+Chưa đủ dữ liệu để kết luận ưu thế kiến trúc hoặc khả năng tổng quát hóa.
+Metric đo phân loại crop với tọa độ cho sẵn, không phải điểm RSNA đầy đủ
+và không đánh giá bước tự phát hiện vị trí cần crop.
+Để mở rộng thí nghiệm: dùng nhiều ca hơn và số epoch đủ, chọn cấu hình trên
+validation. Có thể thử trọng số lớp tính từ train nếu mất cân bằng còn rõ.
+Không lặp lại việc chọn cấu hình theo điểm test của lần chạy thử này.
+Không chọn lọc riêng lần chạy có điểm tốt để thay vào bảng so sánh.
+
+Vẽ và kiểm tra lại toàn bộ kết quả
+test_comparison.png và test_confusion_matrices.png trong thư mục này được vẽ
+trực tiếp từ val/test_metrics.json, cùng phong cách summarize_densenet_results.py.
+summarize_resnet_results.py chưa chạy được ở đây vì thiếu val/test_predictions.csv
+(xác suất từng crop không in trong notebook). Muốn kiểm tra đầy đủ: tải thêm
+các file *_predictions.csv và samples.csv từ /kaggle/working/cnn_resnet_smoke_v2
+trên Kaggle rồi chạy: python resnet/summarize_resnet_results.py
+results/issue4_resnet_smoke_v1. Chỉ có một epoch nên không vẽ learning curve.
+PR cần thành viên khác review trước khi merge.
